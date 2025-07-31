@@ -7,10 +7,5 @@
       "runtime": "python3.9"
     }
   },
-  "routes": [
-    {
-      "src": "/api",
-      "dest": "/api/index.py"
-    }
-  ]
+ 
 }
