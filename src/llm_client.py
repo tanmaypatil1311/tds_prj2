@@ -52,7 +52,7 @@ class GeminiClient:
         try:
             print(f"Generating content with prompt: {prompt}")
             response = await self.model.generate_content_async(prompt)
-            print(f"Response received: {response.text[:100]}...")  # Print first 100 chars for brevity
+            print(f"Response received: {response.text}")  # Print first 100 chars for brevity
             return response
         except Exception as e:
             # Fallback to sync if async fails
