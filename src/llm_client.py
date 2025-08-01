@@ -7,7 +7,7 @@ from typing import Dict, Any
 class GeminiClient:
     def __init__(self):
         genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-        self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
+        self.model = genai.GenerativeModel('gemini-2.5-pro')
     
     async def parse_task(self, question_text: str) -> Dict[str, Any]:
         """Parse the input task into structured format"""

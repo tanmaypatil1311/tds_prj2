@@ -214,7 +214,7 @@ print(json.dumps({{'result': result, 'type': str(type(result).__name__)}}))
 """
                 code_file.write(full_code)
                 code_file_path = code_file.name
-            
+            print(f"Generated code saved to: {code_file_path}")
             # Execute the code
             result = subprocess.run(
                 [sys.executable, code_file_path],
