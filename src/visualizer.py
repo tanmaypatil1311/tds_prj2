@@ -1,7 +1,3 @@
-# ## 7. Visualization with Matplotlib
-
-# ### src/visualizer.py
-# ```python
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
@@ -18,9 +14,12 @@ from llm_client import GeminiClient
 
 class ChartGenerator:
     def __init__(self):
-        # Set style for better-looking plots
-        plt.style.use('seaborn-v0_8')
+        # Set seaborn as primary style - modern and clean
+        sns.set_style("whitegrid")
+        sns.set_context("notebook", font_scale=1.1)
         sns.set_palette("husl")
+        plt.rcParams['figure.facecolor'] = 'white'
+        plt.rcParams['axes.facecolor'] = 'white'
         self.llm = GeminiClient()
     
     async def generate_chart_with_llm(self, data: pd.DataFrame, task: Dict) -> str:
@@ -71,9 +70,9 @@ class ChartGenerator:
         return sample
     
     async def _generate_chart_code(self, sample_data: Dict, task: Dict) -> str:
-        """Generate Python code for chart creation using LLM"""
+        """Generate Python code for chart creation using LLM with seaborn focus"""
         prompt = f"""
-        You are a data visualization code generator. Generate Python code to create a chart based on the task and data.
+        You are a data visualization code generator specializing in seaborn. Generate Python code to create a chart based on the task and data.
 
         SAMPLE DATA STRUCTURE:
         - Shape: {sample_data['shape']}
@@ -85,42 +84,56 @@ class ChartGenerator:
         
         REQUIREMENTS:
         1. The DataFrame is already loaded as 'df'
-        2. Import matplotlib.pyplot as plt, seaborn as sns, numpy as np, pandas as pd
-        3. Create the requested visualization (scatter plot, bar chart, line plot, etc.)
-        4. Handle missing/invalid data gracefully
-        5. Add appropriate labels, title, and formatting
-        6. Use figsize=(10, 6) for good proportions
-        7. If regression line requested, add it with specified color/style
-        8. Save the plot using plt.savefig() to a specified path
+        2. PRIMARY: Use seaborn functions (sns.scatterplot, sns.barplot, sns.lineplot, sns.boxplot, sns.heatmap, etc.)
+        3. SECONDARY: Use matplotlib.pyplot only for figure management and saving
+        4. Handle missing/invalid data gracefully with df.dropna() or fillna()
+        5. Use figsize=(12, 8) for good proportions
+        6. Add appropriate titles and labels using plt.title(), plt.xlabel(), plt.ylabel()
+        7. Use seaborn's built-in styling and color palettes
+        8. Save the plot using plt.savefig() to SAVE_PATH
         9. Clear the plot with plt.close() after saving
-        10. Set DPI to 100 for good quality but reasonable file size
+        10. Set DPI to 100 for good quality
+
+        SEABORN CHART TYPES TO PREFER:
+        - Scatter plots: sns.scatterplot(data=df, x='col1', y='col2', hue='category')
+        - Bar charts: sns.barplot(data=df, x='category', y='value')
+        - Line plots: sns.lineplot(data=df, x='time', y='value', hue='group')
+        - Box plots: sns.boxplot(data=df, x='category', y='value')
+        - Violin plots: sns.violinplot(data=df, x='category', y='value')
+        - Heatmaps: sns.heatmap(df.corr(), annot=True, cmap='coolwarm')
+        - Histograms: sns.histplot(data=df, x='value', kde=True)
+        - Count plots: sns.countplot(data=df, x='category')
+        - Regression plots: sns.regplot(data=df, x='x', y='y') or sns.lmplot()
 
         EXAMPLE CODE STRUCTURE:
         ```python
-        import matplotlib.pyplot as plt
         import seaborn as sns
+        import matplotlib.pyplot as plt
         import pandas as pd
         import numpy as np
         
         # Data cleaning and preparation
-        # ... your cleaning code here ...
+        df_clean = df.dropna()  # or appropriate cleaning
         
-        # Create the visualization
-        plt.figure(figsize=(10, 6))
+        # Create the visualization using seaborn
+        plt.figure(figsize=(12, 8))
         
-        # ... your plotting code here ...
+        # Use seaborn function (example)
+        sns.scatterplot(data=df_clean, x='column1', y='column2', hue='category', s=60, alpha=0.7)
         
-        plt.title('Your Chart Title')
-        plt.xlabel('X Label')
-        plt.ylabel('Y Label')
-        plt.grid(True, alpha=0.3)
+        # Add labels and formatting
+        plt.title('Your Chart Title', fontsize=16, fontweight='bold')
+        plt.xlabel('X Label', fontsize=12)
+        plt.ylabel('Y Label', fontsize=12)
+        plt.xticks(rotation=45)
+        plt.tight_layout()
         
         # Save the plot
-        plt.savefig(SAVE_PATH, dpi=100, bbox_inches='tight')
+        plt.savefig(SAVE_PATH, dpi=100, bbox_inches='tight', facecolor='white')
         plt.close()
         ```
 
-        Generate ONLY the Python code, no explanations:
+        Generate ONLY the Python code focusing on seaborn functions, no explanations:
         """
         
         try:
@@ -166,11 +179,15 @@ class ChartGenerator:
             # Create temporary files
             data_path = self._save_temp_data(data)
             
+            # Convert Windows path to forward slashes
+            data_path_unix = data_path.replace('\\', '/')
+            
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as code_file:
                 with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as img_file:
                     img_path = img_file.name
+                    img_path_unix = img_path.replace('\\', '/')
                 
-                # Write the chart generation code
+                # Write the chart generation code with proper path handling
                 full_code = f"""
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
@@ -181,11 +198,16 @@ import numpy as np
 import warnings
 warnings.filterwarnings('ignore')
 
-# Load the data
-df = pd.read_csv('{data_path}')
+# Set seaborn style
+sns.set_style("whitegrid")
+sns.set_context("notebook", font_scale=1.1)
+sns.set_palette("husl")
+
+# Load the data (using forward slashes for Windows compatibility)
+df = pd.read_csv('{data_path_unix}')
 
 # Set the save path
-SAVE_PATH = '{img_path}'
+SAVE_PATH = '{img_path_unix}'
 
 # Generated chart code
 {code}
@@ -195,6 +217,10 @@ print("Chart saved successfully")
                 code_file.write(full_code)
                 code_file_path = code_file.name
             
+            print(f"Chart code saved to: {code_file_path}")
+            print(f"Data path: {data_path_unix}")
+            print(f"Image will be saved to: {img_path_unix}")
+            
             # Execute the code
             result = subprocess.run(
                 [sys.executable, code_file_path],
@@ -203,11 +229,16 @@ print("Chart saved successfully")
                 timeout=60  # 60 second timeout for chart generation
             )
             
-            # Clean up code file
-            os.unlink(code_file_path)
-            os.unlink(data_path)
+            # Clean up code file and data file
+            try:
+                os.unlink(code_file_path)
+                os.unlink(data_path)
+            except OSError:
+                pass
             
             if result.returncode != 0:
+                print(f"STDOUT: {result.stdout}")
+                print(f"STDERR: {result.stderr}")
                 raise Exception(f"Chart generation failed: {result.stderr}")
             
             # Read the generated image and convert to base64
@@ -217,11 +248,13 @@ print("Chart saved successfully")
                     base64_image = base64.b64encode(img_data).decode()
                 
                 # Clean up image file
-                os.unlink(img_path)
+                try:
+                    os.unlink(img_path)
+                except OSError:
+                    pass
                 
-                # Check size (under 100KB)
+                # Check size and compress if needed
                 if len(base64_image) > 100000:
-                    # Try to compress or reduce quality
                     base64_image = await self._compress_image(base64_image)
                 
                 return f"data:image/png;base64,{base64_image}"
@@ -260,3 +293,36 @@ print("Chart saved successfully")
         except Exception:
             # If compression fails, truncate the original
             return base64_image[:100000] if len(base64_image) > 100000 else base64_image
+
+    # Convenience methods for common seaborn charts
+    async def create_scatter_plot(self, data: pd.DataFrame, x_col: str, y_col: str, hue_col: str = None) -> str:
+        """Create a scatter plot using seaborn"""
+        task = {
+            'question': f'Create a scatter plot of {x_col} vs {y_col}' + (f' colored by {hue_col}' if hue_col else ''),
+            'type': 'visualization'
+        }
+        return await self.generate_chart_with_llm(data, task)
+    
+    async def create_bar_chart(self, data: pd.DataFrame, x_col: str, y_col: str) -> str:
+        """Create a bar chart using seaborn"""
+        task = {
+            'question': f'Create a bar chart showing {y_col} by {x_col}',
+            'type': 'visualization'
+        }
+        return await self.generate_chart_with_llm(data, task)
+    
+    async def create_correlation_heatmap(self, data: pd.DataFrame) -> str:
+        """Create a correlation heatmap using seaborn"""
+        task = {
+            'question': 'Create a correlation heatmap of all numeric columns',
+            'type': 'visualization'
+        }
+        return await self.generate_chart_with_llm(data, task)
+    
+    async def create_box_plot(self, data: pd.DataFrame, x_col: str, y_col: str) -> str:
+        """Create a box plot using seaborn"""
+        task = {
+            'question': f'Create a box plot showing distribution of {y_col} by {x_col}',
+            'type': 'visualization'
+        }
+        return await self.generate_chart_with_llm(data, task)

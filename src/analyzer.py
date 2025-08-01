@@ -1,3 +1,4 @@
+##analyzer.py
 import sys
 import pandas as pd
 import numpy as np
@@ -8,17 +9,16 @@ import os
 from typing import Any, Dict, List
 
 from scraper import WebScraper
-from llm_client import GeminiClient  # Commented out for testing
+from llm_client import GeminiClient
 
 class DataAnalyzer:
     def __init__(self):
         self.data = None
-        self.llm = GeminiClient()  # Commented out for testing
+        self.llm = GeminiClient()
     
     async def structure_data(self, html_content: str, task_info: Dict) -> pd.DataFrame:
         """Convert scraped HTML to structured data - works with any website"""
         print("Structuring data from HTML content...")
-        # from scraper import WebScraper
         from bs4 import BeautifulSoup
         scraper = WebScraper()
         
@@ -47,8 +47,8 @@ class DataAnalyzer:
         if len(non_empty_tables) == 0:
             raise Exception("All extracted tables are empty")
         
-        # Find the most relevant table based on size and content
-        main_table = self._select_best_table(non_empty_tables, task_info)
+        # Find the most relevant table based on tasks using LLM
+        main_table = await self._select_best_table_with_llm(non_empty_tables, task_info)
         
         print(f"Selected main table with shape: {main_table.shape}")    
         
@@ -139,18 +139,8 @@ class DataAnalyzer:
         """
         
         try:
-            # For testing without LLM client
             response = await self.llm.generate_content(prompt)
             code = self._extract_code_from_response(response.text)
-            
-            # Placeholder code for testing
-#             code = """
-# import pandas as pd
-# import numpy as np
-
-# # Simple test analysis
-# result = len(df)
-# """
             return code
             
         except Exception as e:
@@ -215,6 +205,7 @@ print(json.dumps({{'result': result, 'type': str(type(result).__name__)}}))
                 code_file.write(full_code)
                 code_file_path = code_file.name
             print(f"Generated code saved to: {code_file_path}")
+            
             # Execute the code
             result = subprocess.run(
                 [sys.executable, code_file_path],
@@ -253,48 +244,169 @@ print(json.dumps({{'result': result, 'type': str(type(result).__name__)}}))
             data.to_csv(temp_file.name, index=False)
             return temp_file.name
     
-    def _select_best_table(self, tables: List[pd.DataFrame], task_info: Dict) -> pd.DataFrame:
-        """Select the most relevant table from multiple tables"""
-        print("Selecting the best table from extracted tables...")
+    async def _select_best_table_with_llm(self, tables: List[pd.DataFrame], task_info: Dict) -> pd.DataFrame:
+        """Select the most relevant table using LLM analysis"""
+        print("Using LLM to select the best table for the tasks...")
         
         if len(tables) == 1:
+            print("Only one table found, returning it.")
             return tables[0]
         
-        # Score tables based on size and relevance
+        try:
+            # Prepare table metadata for LLM
+            table_metadata = self._prepare_table_metadata(tables)
+            
+            # Get LLM's decision
+            selected_table_index = await self._get_llm_table_selection(table_metadata, task_info)
+            
+            # Validate the selection
+            if 0 <= selected_table_index < len(tables):
+                print(f"LLM selected table {selected_table_index}")
+                return tables[selected_table_index]
+            else:
+                print(f"Invalid LLM selection {selected_table_index}, falling back to largest table")
+                return self._fallback_table_selection(tables)
+                
+        except Exception as e:
+            print(f"LLM table selection failed: {str(e)}, falling back to heuristic selection")
+            return self._fallback_table_selection(tables)
+    
+    def _prepare_table_metadata(self, tables: List[pd.DataFrame]) -> List[Dict]:
+        """Prepare lightweight metadata for each table"""
+        print("Preparing table metadata for LLM analysis...")
+        metadata = []
+        
+        for i, table in enumerate(tables):
+            # Get basic table info
+            table_info = {
+                'table_number': i,
+                'shape': table.shape,
+                'columns': list(table.columns),
+                'column_count': len(table.columns),
+                'row_count': len(table),
+                'data_types': {}
+            }
+            
+            # Add data type information
+            for col in table.columns:
+                dtype_str = str(table[col].dtype)
+                # Simplify dtype for LLM
+                if 'int' in dtype_str:
+                    table_info['data_types'][col] = 'integer'
+                elif 'float' in dtype_str:
+                    table_info['data_types'][col] = 'numeric'
+                elif 'object' in dtype_str:
+                    table_info['data_types'][col] = 'text'
+                elif 'datetime' in dtype_str:
+                    table_info['data_types'][col] = 'date'
+                else:
+                    table_info['data_types'][col] = 'other'
+            
+            # Add sample values for context (first few non-null values per column)
+            table_info['sample_values'] = {}
+            for col in table.columns:
+                non_null_values = table[col].dropna()
+                if len(non_null_values) > 0:
+                    # Get first 3 unique values
+                    sample_vals = non_null_values.unique()[:3]
+                    table_info['sample_values'][col] = [str(val) for val in sample_vals]
+                else:
+                    table_info['sample_values'][col] = []
+            
+            metadata.append(table_info)
+        
+        return metadata
+    
+    async def _get_llm_table_selection(self, table_metadata: List[Dict], task_info: Dict) -> int:
+        """Use LLM to select the best table based on tasks"""
+        print("Asking LLM to select the best table...")
+        
+        # Extract tasks from task_info
+        tasks = task_info.get('tasks', [])
+        if not tasks:
+            # If no tasks in task_info, check if it's a single task
+            if 'question' in task_info:
+                tasks = [task_info]
+        
+        # Prepare the prompt
+        prompt = f"""
+        You are a data analyst tasked with selecting the most appropriate table for analysis.
+
+        AVAILABLE TABLES:
+        {json.dumps(table_metadata, indent=2)}
+
+        ANALYSIS TASKS TO PERFORM:
+        {json.dumps(tasks, indent=2)}
+
+        INSTRUCTIONS:
+        1. Analyze which table contains the data most relevant to ALL the given tasks
+        2. Consider column names, data types, sample values, and table size
+        3. Look for tables that contain the key data needed for the analysis tasks
+        4. Prioritize tables with more relevant columns and adequate data volume
+        5. Return ONLY the table number (integer) that best matches the requirements
+
+        IMPORTANT: 
+        - Return only a single integer (0, 1, 2, etc.) representing the table number
+        - Do not include any explanation or additional text
+        - Choose the table that can best support all or most of the analysis tasks
+
+        Best table number:
+        """
+        
+        try:
+            response = await self.llm.generate_content(prompt)
+            
+            # Extract table number from response
+            table_number = self._extract_table_number(response.text)
+            print(f"LLM selected table number: {table_number}")
+            return table_number
+            
+        except Exception as e:
+            raise Exception(f"LLM table selection failed: {str(e)}")
+    
+    def _extract_table_number(self, response_text: str) -> int:
+        """Extract table number from LLM response"""
+        import re
+        
+        # Clean the response
+        response_text = response_text.strip()
+        
+        # Try to find a number at the start or end of response
+        numbers = re.findall(r'\b\d+\b', response_text)
+        
+        if numbers:
+            # Return the first number found
+            return int(numbers[0])
+        else:
+            # If no number found, raise exception
+            raise ValueError("No valid table number found in LLM response")
+    
+    def _fallback_table_selection(self, tables: List[pd.DataFrame]) -> pd.DataFrame:
+        """Fallback table selection using heuristics when LLM fails"""
+        print("Using fallback heuristic table selection...")
+        
+        # Simple heuristic: choose the table with most columns and rows
         best_table = None
         best_score = 0
         
         for table in tables:
-            # Skip empty tables (should already be filtered, but double-check)
-            if table.empty:
-                continue
-                
-            score = 0
+            # Score based on size and column count
+            score = len(table) * 0.1 + len(table.columns) * 10
             
-            # Size factor (larger tables often contain main data)
-            score += len(table) * 0.1
-            score += len(table.columns) * 0.05
-            
-            # Content relevance (check if columns match expected data types)
-            for col in table.columns:
-                col_str = str(col).lower()
-                # Look for common data indicators
-                if any(keyword in col_str for keyword in ['rank', 'name', 'title', 'year', 'value', 'amount', 'price', 'score']):
-                    score += 10
-                if any(keyword in col_str for keyword in ['gross', 'revenue', 'sales', 'budget', 'profit']):
-                    score += 15
+            # Bonus for having numeric columns (often indicates data tables)
+            numeric_cols = sum(1 for col in table.columns if table[col].dtype in ['int64', 'float64'])
+            score += numeric_cols * 5
             
             if score > best_score:
                 best_score = score
                 best_table = table
         
-        print(f"Best table selected with score: {best_score}")
-        
-        # Return best table or first table as fallback
-        if best_table is not None:
-            return best_table
-        else:
-            return tables[0]
+        return best_table if best_table is not None else tables[0]
+    
+    def _select_best_table(self, tables: List[pd.DataFrame], task_info: Dict) -> pd.DataFrame:
+        """Legacy method - kept for backward compatibility"""
+        print("Using legacy table selection method...")
+        return self._fallback_table_selection(tables)
     
     def _extract_structured_content(self, soup) -> List[Dict]:
         """Extract structured content from non-table elements"""
