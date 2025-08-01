@@ -11,22 +11,24 @@ class WebScraper:
     
     async def scrape_url(self, url: str) -> str:
         """Scrape content from URL using Playwright"""
+        print(f"Scraping URL: {url}")
         async with async_playwright() as p:
+            print("Launching browser...")
             # Launch browser (headless for production)
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context()
             page = await context.new_page()
-            
+            print("Browser launched, navigating to URL...") 
             try:
                 # Navigate to URL
                 await page.goto(url, wait_until='networkidle')
-                
+                print("Page loaded, waiting for content...")
                 # Get page content
                 content = await page.content()
                 
                 # Close browser
                 await browser.close()
-                
+                print("Browser closed, returning content...")
                 return content
             
             except Exception as e:
@@ -41,9 +43,16 @@ class WebScraper:
         dataframes = []
         for table in tables:
             try:
-                df = pd.read_html(str(table))[0]
-                dataframes.append(df)
-            except:
+                # Use pd.read_html directly on the table string
+                df_list = pd.read_html(str(table))
+                if df_list:  # Check if list is not empty
+                    for df in df_list:
+                        if not df.empty:  # Only add non-empty DataFrames
+                            dataframes.append(df)
+            except Exception as e:
+                print(f"Failed to parse table: {e}")
                 continue
         
+        print(f"Extracted {len(dataframes)} tables from HTML content.")
         return dataframes
+
