@@ -8,12 +8,12 @@ import os
 from typing import Any, Dict, List
 
 from scraper import WebScraper
-# from llm_client import GeminiClient  # Commented out for testing
+from llm_client import GeminiClient  # Commented out for testing
 
 class DataAnalyzer:
     def __init__(self):
         self.data = None
-        # self.llm = GeminiClient()  # Commented out for testing
+        self.llm = GeminiClient()  # Commented out for testing
     
     async def structure_data(self, html_content: str, task_info: Dict) -> pd.DataFrame:
         """Convert scraped HTML to structured data - works with any website"""
@@ -140,17 +140,17 @@ class DataAnalyzer:
         
         try:
             # For testing without LLM client
-            # response = await self.llm.generate_content(prompt)
-            # code = self._extract_code_from_response(response.text)
+            response = await self.llm.generate_content(prompt)
+            code = self._extract_code_from_response(response.text)
             
             # Placeholder code for testing
-            code = """
-import pandas as pd
-import numpy as np
+#             code = """
+# import pandas as pd
+# import numpy as np
 
-# Simple test analysis
-result = len(df)
-"""
+# # Simple test analysis
+# result = len(df)
+# """
             return code
             
         except Exception as e:
@@ -187,10 +187,13 @@ result = len(df)
         """Execute the generated analysis code safely"""
         try:
             print("Executing generated analysis code...")
-            print(code)
+            
+            # Save data to temp file and get the path
+            temp_data_path = self._save_temp_data(data)
+            
             # Create temporary files
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as code_file:
-                # Write the analysis code
+                # Write the analysis code with proper path escaping
                 full_code = f"""
 import pandas as pd
 import numpy as np
@@ -200,8 +203,8 @@ from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
-# Load the data
-df = pd.read_csv('{self._save_temp_data(data)}')
+# Load the data (using raw string to handle Windows paths)
+df = pd.read_csv(r'{temp_data_path}')
 
 # Generated analysis code
 {code}
@@ -220,8 +223,12 @@ print(json.dumps({{'result': result, 'type': str(type(result).__name__)}}))
                 timeout=30  # 30 second timeout
             )
             
-            # Clean up
-            os.unlink(code_file_path)
+            # Clean up temporary files
+            try:
+                os.unlink(code_file_path)
+                os.unlink(temp_data_path)
+            except OSError:
+                pass  # Ignore cleanup errors
             
             if result.returncode != 0:
                 raise Exception(f"Code execution failed: {result.stderr}")

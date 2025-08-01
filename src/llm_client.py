@@ -7,7 +7,7 @@ from typing import Dict, Any
 class GeminiClient:
     def __init__(self):
         genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
     
     async def parse_task(self, question_text: str) -> Dict[str, Any]:
         """Parse the input task into structured format"""
@@ -46,7 +46,18 @@ class GeminiClient:
                 return self._fallback_parse(question_text)
         except Exception as e:
             return self._fallback_parse(question_text)
-    
+
+    async def generate_content(self, prompt: str):
+        """Generate content using Gemini"""
+        try:
+            print(f"Generating content with prompt: {prompt}")
+            response = await self.model.generate_content_async(prompt)
+            print(f"Response received: {response.text[:100]}...")  # Print first 100 chars for brevity
+            return response
+        except Exception as e:
+            # Fallback to sync if async fails
+            response = self.model.generate_content(prompt)
+            return response
     def _fallback_parse(self, question_text: str) -> Dict[str, Any]:
         """Fallback parsing if LLM fails"""
         # Simple regex-based parsing

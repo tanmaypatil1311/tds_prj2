@@ -41,7 +41,7 @@ class DataAnalystAgent:
                     # Use LLM to generate and execute analysis code
                     print(f"Analyzing task: {task['question']}")
                     result = await self.analyzer.analyze_with_llm_code(structured_data, task)
-                
+                print(result)
                 results.append(result)
             
             return results
