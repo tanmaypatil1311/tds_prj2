@@ -10,7 +10,8 @@ import json
 import os
 import sys
 from typing import Dict
-from llm_client import GeminiClient
+from src.llm_client import GeminiClient
+
 
 class ChartGenerator:
     def __init__(self):
