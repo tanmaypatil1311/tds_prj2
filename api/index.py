@@ -6,9 +6,9 @@ import asyncio
 from werkzeug.utils import secure_filename
 
 # Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from agent import DataAnalystAgent
+
+from src.agent import DataAnalystAgent
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
