@@ -1,4 +1,7 @@
 flask
+werkzeug
+gunicorn
+duckdb
 google-generativeai
 playwright
 pandas
