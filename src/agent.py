@@ -2,10 +2,10 @@ import asyncio
 import json
 import re
 from typing import List, Dict, Any
-from llm_client import GeminiClient
-from scraper import WebScraper
-from analyzer import DataAnalyzer
-from visualizer import ChartGenerator
+from src.llm_client import GeminiClient
+from src.scraper import WebScraper
+from src.analyzer import DataAnalyzer
+from src.visualizer import ChartGenerator
 
 class DataAnalystAgent:
     def __init__(self):
