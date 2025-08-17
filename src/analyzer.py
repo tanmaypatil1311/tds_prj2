@@ -8,8 +8,9 @@ import json
 import os
 from typing import Any, Dict, List
 
-from scraper import WebScraper
-from llm_client import GeminiClient
+
+from src.llm_client import GeminiClient
+from src.scraper import WebScraper
 
 class DataAnalyzer:
     def __init__(self):
