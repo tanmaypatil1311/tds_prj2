@@ -11,4 +11,4 @@ COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Start Gunicorn server (Render provides $PORT at runtime)
-CMD bash -c 'gunicorn -w 4 -b 0.0.0.0:$PORT api.index:app'
+CMD bash -c 'gunicorn -w 1 --timeout 120 -b 0.0.0.0:$PORT api.index:app'
