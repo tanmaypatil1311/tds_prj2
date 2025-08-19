@@ -10,9 +10,5 @@ COPY . .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose port (Render sets $PORT automatically)
-ENV PORT=10000
-EXPOSE $PORT
-
-# Start Gunicorn server
+# Start Gunicorn server (Render provides $PORT automatically)
 CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:$PORT", "api.index:app"]
